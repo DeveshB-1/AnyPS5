@@ -155,26 +155,28 @@ int APS5_VABI scePngEncEncode(void* handle, const PngEncEncodeParam* param, PngE
     }
 
     const bool overflow = png.size() > param->png_mem_size;
-    PngEncOutputInfo originalOutputInfo{};
     const int savedErrno = errno;
-    if (outputInfo && !GuestCopyIn_nid_no_patch(&originalOutputInfo, outputInfo, sizeof(originalOutputInfo))) {
-        errno = savedErrno;
-        return PNG_ENC_ERROR_INVALID_ADDR;
-    }
-    if (outputInfo) {
-        const PngEncOutputInfo outInfo{overflow ? 0 : static_cast<std::uint32_t>(png.size()), overflow ? 0 : height};
-        if (!GuestCopyOut_nid_no_patch(outputInfo, &outInfo, sizeof(outInfo))) {
-            errno = savedErrno;
-            return PNG_ENC_ERROR_INVALID_ADDR;
-        }
-    }
     if (overflow) {
+        if (outputInfo) {
+            const PngEncOutputInfo zeroInfo{0, 0};
+            if (!GuestCopyOut_nid_no_patch(outputInfo, &zeroInfo, sizeof(zeroInfo))) {
+                errno = savedErrno;
+                return PNG_ENC_ERROR_INVALID_ADDR;
+            }
+        }
         errno = savedErrno;
         return PNG_ENC_ERROR_DATA_OVERFLOW;
     }
     if (!GuestCopyOut_nid_no_patch(param->png_mem_addr, png.data(), png.size())) {
         errno = savedErrno;
         return PNG_ENC_ERROR_INVALID_ADDR;
+    }
+    if (outputInfo) {
+        const PngEncOutputInfo outInfo{static_cast<std::uint32_t>(png.size()), height};
+        if (!GuestCopyOut_nid_no_patch(outputInfo, &outInfo, sizeof(outInfo))) {
+            errno = savedErrno;
+            return PNG_ENC_ERROR_INVALID_ADDR;
+        }
     }
     errno = savedErrno;
     return static_cast<int>(png.size());
